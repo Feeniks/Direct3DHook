@@ -314,30 +314,23 @@ namespace Capture.Hook
 
                         // Note: it would be possible to capture multiple frames and process them in a background thread
 
-                        // Copy to memory and send back to host process on a background thread so that we do not cause any delay in the rendering pipeline
                         Guid requestId = this.Request.RequestId; // this.Request gets set to null, so copy the RequestId for use in the thread
-                        ThreadPool.QueueUserWorkItem(delegate
+                        DateTime startCopyToSystemMemory = DateTime.Now;
+                        using (MemoryStream ms = new MemoryStream())
                         {
-                            //FileStream fs = new FileStream(@"c:\temp\temp.bmp", FileMode.Create);
-                            //Texture2D.ToStream(testSubResourceCopy, ImageFileFormat.Bmp, fs);
+                            Texture2D.ToStream(textureDest.Device.ImmediateContext, textureDest, ImageFileFormat.Bmp, ms);
+                            ms.Position = 0;
+                            this.DebugMessage("PresentHook: Copy to System Memory time: " + (DateTime.Now - startCopyToSystemMemory).ToString());
 
-                            DateTime startCopyToSystemMemory = DateTime.Now;
-                            using (MemoryStream ms = new MemoryStream())
-                            {
-                                Texture2D.ToStream(textureDest.Device.ImmediateContext, textureDest, ImageFileFormat.Bmp, ms);
-                                ms.Position = 0;
-                                this.DebugMessage("PresentHook: Copy to System Memory time: " + (DateTime.Now - startCopyToSystemMemory).ToString());
+                            DateTime startSendResponse = DateTime.Now;
+                            ProcessCapture(ms, requestId);
+                            this.DebugMessage("PresentHook: Send response time: " + (DateTime.Now - startSendResponse).ToString());
+                        }
 
-                                DateTime startSendResponse = DateTime.Now;
-                                ProcessCapture(ms, requestId);
-                                this.DebugMessage("PresentHook: Send response time: " + (DateTime.Now - startSendResponse).ToString());
-                            }
-
-                            // Free the textureDest as we no longer need it.
-                            textureDest.Dispose();
-                            textureDest = null;
-                            this.DebugMessage("PresentHook: Full Capture time: " + (DateTime.Now - startTime).ToString());
-                        });
+                        // Free the textureDest as we no longer need it.
+                        textureDest.Dispose();
+                        textureDest = null;
+                        this.DebugMessage("PresentHook: Full Capture time: " + (DateTime.Now - startTime).ToString());
 
                         // Prevent the request from being processed a second time
                         this.Request = null;
